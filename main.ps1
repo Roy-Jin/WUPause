@@ -3,19 +3,24 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # ============================================================
 #  Windows 更新暂停工具
-$Version = "v1.0.0"
+$Version = "v1.1.0"
 $Author  = "Roy-Jin (GitHub)"
 # ============================================================
 
-# 注册表路径与要写入的键值（均为 String 类型）
+# 注册表路径与要写入的键值
 $RegPath = "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings"
-$ItemsToManage = @{
-    "PauseFeatureUpdatesEndTime"   = "9999-01-01T00:00:00Z"
-    "PauseFeatureUpdatesStartTime" = "2026-01-01T00:00:00Z"
-    "PauseQualityUpdatesEndTime"   = "9999-01-01T00:00:00Z"
-    "PauseQualityUpdatesStartTime" = "2026-01-01T00:00:00Z"
-    "PauseUpdatesExpiryTime"       = "9999-01-01T00:00:00Z"
-    "PauseUpdatesStartTime"        = "2026-01-01T00:00:00Z"
+$PauseStart = (Get-Date).AddDays(-1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$PauseEnd = "9999-01-01T00:00:00Z"
+$StringItems = @{
+    "PauseFeatureUpdatesEndTime"   = $PauseEnd
+    "PauseFeatureUpdatesStartTime" = $PauseStart
+    "PauseQualityUpdatesEndTime"   = $PauseEnd
+    "PauseQualityUpdatesStartTime" = $PauseStart
+    "PauseUpdatesExpiryTime"       = $PauseEnd
+    "PauseUpdatesStartTime"        = $PauseStart
+}
+$DWordItems = @{
+    "FlightSettingsMaxPauseDays" = 3650
 }
 
 $CurrentUser  = [Environment]::UserName
@@ -24,9 +29,19 @@ $ComputerName = [Environment]::MachineName
 # 写入暂停键值
 function Set-WUUX {
     if (-not (Test-Path $RegPath)) { New-Item -Path $RegPath -Force | Out-Null }
-    foreach ($key in $ItemsToManage.Keys) {
+
+    foreach ($key in $StringItems.Keys) {
         try {
-            New-ItemProperty -Path $RegPath -Name $key -Value $ItemsToManage[$key] -PropertyType String -Force | Out-Null
+            New-ItemProperty -Path $RegPath -Name $key -Value $StringItems[$key] -PropertyType String -Force | Out-Null
+            Write-Host "    [OK] 写入成功: $key" -ForegroundColor Green
+        } catch {
+            Write-Host "    [ERR] 写入失败: $key" -ForegroundColor Red
+        }
+    }
+
+    foreach ($key in $DWordItems.Keys) {
+        try {
+            New-ItemProperty -Path $RegPath -Name $key -Value $DWordItems[$key] -PropertyType DWord -Force | Out-Null
             Write-Host "    [OK] 写入成功: $key" -ForegroundColor Green
         } catch {
             Write-Host "    [ERR] 写入失败: $key" -ForegroundColor Red
@@ -40,7 +55,11 @@ function Remove-WUUX {
         Write-Host "    [INFO] 未发现注册表路径，无需删除。" -ForegroundColor Yellow
         return
     }
-    foreach ($key in $ItemsToManage.Keys) {
+    foreach ($key in $StringItems.Keys) {
+        Remove-ItemProperty -Path $RegPath -Name $key -Force -ErrorAction SilentlyContinue
+        Write-Host "    [OK] 已删除: $key" -ForegroundColor Green
+    }
+    foreach ($key in $DWordItems.Keys) {
         Remove-ItemProperty -Path $RegPath -Name $key -Force -ErrorAction SilentlyContinue
         Write-Host "    [OK] 已删除: $key" -ForegroundColor Green
     }
@@ -64,7 +83,7 @@ function Show-TUI {
     Write-Host $line -ForegroundColor Cyan
     Write-Host "   Windows 更新暂停工具" -ForegroundColor White
     Write-Host "   版本: $Version    作者: $Author" -ForegroundColor DarkGray
-    Write-Host "   本脚本仅作演示用例使用，请勿用于生产环境。" -ForegroundColor DarkGray
+    Write-Host "   需要帮助或反馈: https://github.com/Roy-Jin/WUPause/issues" -ForegroundColor DarkGray
     Write-Host $line -ForegroundColor Cyan
     Write-Host ""
     Write-Host "   当前用户: $CurrentUser    计算机: $ComputerName" -ForegroundColor Gray
@@ -111,4 +130,3 @@ while ($again) {
     }
     if ($again) { Show-TUI }
 }
-Read-Host "`n  按 Enter 退出窗口"
